@@ -6,7 +6,8 @@ interface
 
 uses
   Classes,
-  SysUtils;
+  SysUtils,
+  Generics.Collections;
 
 procedure Process(const DirectoryPath: String; const IdOffset: UInt32; const OutputFileName: string; const Log: TStrings);
 
@@ -39,7 +40,7 @@ var
   Resources: TFileResourceLinkArray = nil;
   InfocardMap: TFileStrings = (FileName: ''; Strings: nil);
 
-procedure AddFileResource(const FileStrings: TStringList; const FileStringsLineNumber: ValSInt; const Resource: TStringList; const ResourceType: TResourceType; const MetaName: String);
+procedure AddFileResource(const FileStrings: TStringList; const FileStringsLineNumber: ValSInt; const Resource: TStringList; const ResourceType: TResourceType; const MetaName: String; const ExistingId: Uint32);
 var
   Entry: ^TFileResourceLink;
 begin
@@ -56,33 +57,76 @@ begin
     Entry^.Resource := nil;
   Entry^.ResourceType := ResourceType;
   Entry^.MetaName := MetaName;
-  Entry^.Id := 0;
+  Entry^.Id := ExistingId;
 end;
 
-procedure LinkResourcesWithIds(const Resources: TFileResourceLinkArray; const IdOffset: Uint32);
+type
+  TUint32ResourceTypeMap = specialize THashMap<Uint32, TResourceType>;
+
+function FindNextFreeIdForResourceType(const ExistingIdsWithType: TUint32ResourceTypeMap; const IdStart: Uint32; const ResourceType: TResourceType): Uint32;
 var
-  LastId: Uint32;
+  NextFreeId: Uint32;
+  BlockStartId: Uint32;
+  BlockId: Uint32;
+  FoundType: TResourceType;
+  SameResourceBlock: Boolean;
+begin
+  NextFreeId := IdStart;
+  repeat
+  begin
+    while ExistingIdsWithType.ContainsKey(NextFreeId) do
+      NextFreeId := NextFreeId + 1;
+    BlockStartId := NextFreeId - NextFreeId mod 16;
+    SameResourceBlock := True;
+    for BlockId := BlockStartId to BlockStartId + 16 do
+      if ExistingIdsWithType.TryGetValue(BlockId, FoundType) and (FoundType <> ResourceType) then
+      begin
+        SameResourceBlock := False;
+        NextFreeId := BlockStartId + 16;
+        Break;
+      end;
+  end
+  until SameResourceBlock;
+  Result := NextFreeId;
+end;
+
+procedure LinkResourcesWithIds(const Resources: TFileResourceLinkArray; const IdOffset: Uint32; const Log: TStrings);
+var
+  NextFreeId: Uint32;
   Index: ValSInt;
   MetaIndex: ValSInt;
+  ExistingIdsWithType: TUint32ResourceTypeMap;
 begin
-  LastId := IdOffset;
-
+  // Collect all already existing IDs
+  ExistingIdsWithType := TUint32ResourceTypeMap.Create;
   for Index := 0 to High(Resources) do
-    if Resources[Index].ResourceType = TResourceType.StringType then
+    if Resources[Index].Id <> 0 then
     begin
-      Resources[Index].Id := LastId;
-      LastId := LastId + 1;
+      try
+        ExistingIdsWithType.Add(Resources[Index].Id, Resources[Index].ResourceType);
+      except
+        On EListError do Log.Append('ID duplicated! ' + IntToStr(Resources[Index].Id));
+      end;
     end;
-
-  // Simple string resources are packed in blocks of 16. For HTML resources an ID outside of those blocks should be used.
-  if (LastId mod 16) <> 0 then
-    LastId := 16 - (LastId mod 16) + LastId;
-
+                 
+  NextFreeId := IdOffset;
   for Index := 0 to High(Resources) do
-    if Resources[Index].ResourceType = TResourceType.HtmlType then
+    if (Resources[Index].ResourceType = TResourceType.StringType) and (Resources[Index].Id = 0) then
     begin
-      Resources[Index].Id := LastId;
-      LastId := LastId + 1;
+      Resources[Index].Id := FindNextFreeIdForResourceType(ExistingIdsWithType, NextFreeId, Resources[Index].ResourceType);
+      ExistingIdsWithType.Add(Resources[Index].Id, Resources[Index].ResourceType);                                 
+      NextFreeId := Resources[Index].Id + 1;
+      Log.Append('Added new ID: ' + IntToStr(Resources[Index].Id));
+    end;
+                      
+  NextFreeId := IdOffset;
+  for Index := 0 to High(Resources) do
+    if (Resources[Index].ResourceType = TResourceType.HtmlType) and (Resources[Index].Id = 0)  then
+    begin
+      Resources[Index].Id := FindNextFreeIdForResourceType(ExistingIdsWithType, NextFreeId, Resources[Index].ResourceType);
+      ExistingIdsWithType.Add(Resources[Index].Id, Resources[Index].ResourceType);          
+      NextFreeId := Resources[Index].Id + 1;
+      Log.Append('Added new ID: ' + IntToStr(Resources[Index].Id));
     end;
 
   // Link all ids that want other ids that are already existing.
@@ -90,9 +134,9 @@ begin
     if Resources[Index].ResourceType = TResourceType.LinkType then
       for MetaIndex := 0 to High(Resources) do
         if (Resources[MetaIndex].ResourceType <> TResourceType.LinkType) and (Resources[MetaIndex].MetaName.ToLower = Resources[Index].MetaName.ToLower) then
-        begin
           Resources[Index].Id := Resources[MetaIndex].Id;
-        end;
+
+  ExistingIdsWithType.Free;
 end;
 
 function CreateFrcStrings(const Resources: TFileResourceLinkArray): TStringList;
@@ -135,25 +179,25 @@ var
     if Assigned(CurrentFileStrings) and (CurrentFileStringsLineNumber >= 0) and (Length(ResourcesOfCurrentLine) > 0) then
     begin
       Line := CurrentFileStrings.Strings[CurrentFileStringsLineNumber];
-      LineParts := Line.Split(['=']);
+      LineParts := Line.Split('=');
       if Length(LineParts) = 2 then
       begin
         case LineParts[0].Trim.ToLower of
           'rumor':
           begin
-            ValueParts := LineParts[1].Split([',']);
+            ValueParts := LineParts[1].Split(',');
             if Length(ValueParts) > 3 then
               Line := LineParts[0] + '=' + ValueParts[0] + ',' + ValueParts[1] + ',' + ValueParts[2] + ', ' + IntToStr(ResourcesOfCurrentLine[0].Id);
           end;           
           'rumor_type2':
           begin
-            ValueParts := LineParts[1].Split([',']);
+            ValueParts := LineParts[1].Split(',');
             if Length(ValueParts) > 3 then
               Line := LineParts[0] + '=' + ValueParts[0] + ',' + ValueParts[1] + ',' + ValueParts[2] + ', ' + IntToStr(ResourcesOfCurrentLine[0].Id);
           end;
           'know':
           begin
-            ValueParts := LineParts[1].Split([',']);     
+            ValueParts := LineParts[1].Split(',');
             if Length(ValueParts) > 3 then
               Line := LineParts[0] + '=' + IntToStr(ResourcesOfCurrentLine[0].Id) + ',' + IntToStr(ResourcesOfCurrentLine[1].Id) + ',' + ValueParts[2] + ', ' + ValueParts[3];
           end;
@@ -167,7 +211,7 @@ var
           end;
           'rank_desig':
           begin
-            ValueParts := LineParts[1].Split([',']);
+            ValueParts := LineParts[1].Split(',');
             if (Length(ValueParts) > 4) and (Length(ResourcesOfCurrentLine) > 1) then
               Line := LineParts[0] + '= ' + IntToStr(ResourcesOfCurrentLine[0].Id) + ', ' + IntToStr(ResourcesOfCurrentLine[1].Id) + ', ' + IntToStr(ResourcesOfCurrentLine[2].Id) + ',' + ValueParts[3] + ',' + ValueParts[4];
           end;
@@ -220,31 +264,59 @@ const
 var
   Line: String;
   LineNumber: ValSInt;
+  LineParts: TStringArray = nil;           
+  ValueParts: TStringArray = nil;
   ParentLineNumber: ValSInt = -1;
   FoundResourceType: TResourceType = TResourceType.NoType;
   ResourceContent: TStringList;
   FoundMetaName: String = '';
+  ExistingId: Uint32 = 0;
 begin
   ResourceContent := TStringList.Create;
 
   // Search through each line of the file.
   for LineNumber := 0 to Strings.Count - 1 do
   begin
+    SetLength(LineParts, 0);
     Line := Strings.Strings[LineNumber].TrimLeft;
 
     // If we had found a resource and it does end, save the resource strings and reset the state.
     if (FoundResourceType <> TResourceType.NoType) and (not Line.StartsWith(';') or Line.StartsWith(StringIdentifier) or Line.StartsWith(HtmlIdentifier) or not Line.StartsWith('; ')) then
     begin
-      AddFileResource(Strings, ParentLineNumber, ResourceContent, FoundResourceType, FoundMetaName);
+      AddFileResource(Strings, ParentLineNumber, ResourceContent, FoundResourceType, FoundMetaName, ExistingId);
+      ExistingId := ExistingId + 1;
       ResourceContent.Clear;
       FoundResourceType := TResourceType.NoType;
     end;
 
-    // Skip all lines not starting with a ';'.
+    // Handle lines not starting with a ';'.
     if not Line.StartsWith(';') then
     begin
       Assert(FoundResourceType = TResourceType.NoType);
       ParentLineNumber := LineNumber;
+      ExistingId := 0;
+      ValueParts := nil;  
+      LineParts := Line.ToLower.Split('=');
+      if Length(LineParts) > 1 then
+        ValueParts := LineParts[1].Split(',');
+      if Length(ValueParts) > 0 then
+      begin
+        case LineParts[0].Trim of
+          'rumor',
+          'rumor_type2':
+          begin
+            if Length(ValueParts) > 3 then
+              TryStrToUInt(ValueParts[3].Trim, ExistingId);
+          end;
+          'know':
+          begin
+            if Length(ValueParts) > 1 then
+              TryStrToUInt(ValueParts[0].Trim, ExistingId);
+          end;
+          else
+            TryStrToUInt(ValueParts[0].Trim, ExistingId);
+        end;
+      end;
       Continue;
     end;
 
@@ -274,15 +346,16 @@ begin
     // If the line starts with an identifier for linked resources.
     if Line.StartsWith(LinkIdentifier) then
     begin
-      AddFileResource(Strings, ParentLineNumber, nil, TResourceType.LinkType, Line.Substring(Length(LinkIdentifier)).Trim);
+      AddFileResource(Strings, ParentLineNumber, nil, TResourceType.LinkType, Line.Substring(Length(LinkIdentifier)).Trim, 0);
       Continue;
     end;
   end;
 
   // If we had found a resource and the file does end, save the resource strings and reset the state.
   if (FoundResourceType <> TResourceType.NoType) then
-    AddFileResource(Strings, ParentLineNumber, ResourceContent, FoundResourceType, '');
+    AddFileResource(Strings, ParentLineNumber, ResourceContent, FoundResourceType, '', ExistingId);
 
+  SetLength(LineParts, 0);
   ResourceContent.Free;
 end;
 
@@ -300,7 +373,7 @@ begin
     LineParts := Line.Split(['=']);
     if (Length(LineParts) = 2) and (LineParts[0].Trim.ToLower = 'map') then
     begin
-      ValueParts := LineParts[1].Split([',']);
+      ValueParts := LineParts[1].Split(',');
       if (Length(ValueParts) > 1) and (TryStrToInt(ValueParts[0].Trim, Id) and (Id >= IdOffset)) or (TryStrToInt(ValueParts[1].Trim, Id) and (Id >= IdOffset)) then
       begin
         FileStrings.Delete(LineNumber);
@@ -325,6 +398,7 @@ begin
   for Index := 0 to FilePaths.Count - 1 do
   begin
     IniFile := TStringList.Create;
+    IniFile.TextLineBreakStyle := TTextLineBreakStyle.tlbsCRLF;
     IniFile.LoadFromFile(FilePaths[Index]);
     // Ignore BINI files.
     if (IniFile.Count > 0) and not IniFile.Strings[0].StartsWith('BINI') then
@@ -371,7 +445,7 @@ begin
     FindResources(FileStrings.Strings);
 
   Log.Append('Creating IDs from ' + IntToStr(Length(Resources)) + ' resource blocks...');
-  LinkResourcesWithIds(Resources, IdOffset);
+  LinkResourcesWithIds(Resources, IdOffset, Log);
 
   Log.Append('Writing IDs into .ini files...');
   ApplyIdsToFiles(Resources);
