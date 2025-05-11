@@ -103,9 +103,11 @@ end;
 
 procedure LinkResourcesWithIds(const Resources: TFileResourceLinkArray; const IdOffset: Uint32; const Log: TStrings);
 var
-  NextFreeId: Uint32;
   Index: ValSInt;
   MetaIndex: ValSInt;
+  SameResourceCount: ValSInt;         
+  ContinousIdCount: ValSInt;
+  NextId: ValSInt;
   ExistingIdsWithType: TUint32ResourceTypeMap;
 begin
   // Collect all already existing IDs
@@ -120,23 +122,37 @@ begin
       end;
     end;
 
-  NextFreeId := IdOffset;
   for Index := 0 to High(Resources) do
     if (Resources[Index].ResourceType = TResourceType.StringType) and (Resources[Index].Id = 0) then
     begin
-      Resources[Index].Id := FindNextFreeIdForResourceType(ExistingIdsWithType, NextFreeId, Resources[Index].ResourceType);
+      for SameResourceCount := 0 to High(Resources) - Index do
+        if (Resources[Index].FileStrings <> Resources[Index + SameResourceCount].FileStrings) or (Resources[Index].FileStringsLineNumber <> Resources[Index + SameResourceCount].FileStringsLineNumber) then
+          Break;
+
+      // Find a block of continous free IDs
+      NextId := FindNextFreeIdForResourceType(ExistingIdsWithType, IdOffset, Resources[Index].ResourceType);            
+      ContinousIdCount := 1;
+      while ContinousIdCount < SameResourceCount do
+      begin
+        if NextId + ContinousIdCount = FindNextFreeIdForResourceType(ExistingIdsWithType, NextId + ContinousIdCount, Resources[Index].ResourceType) then
+          ContinousIdCount := ContinousIdCount + 1
+        else
+        begin                
+          NextId := FindNextFreeIdForResourceType(ExistingIdsWithType, NextId + ContinousIdCount + 1, Resources[Index].ResourceType);
+          ContinousIdCount := 1;
+        end;
+      end;
+
+      Resources[Index].Id := NextId;
       ExistingIdsWithType.Add(Resources[Index].Id, Resources[Index].ResourceType);
-      NextFreeId := Resources[Index].Id + 1;
       Log.Append('Added new ID: ' + UIntToStr(Resources[Index].Id));
     end;
 
-  NextFreeId := IdOffset;
   for Index := 0 to High(Resources) do
     if (Resources[Index].ResourceType = TResourceType.HtmlType) and (Resources[Index].Id = 0) then
     begin
-      Resources[Index].Id := FindNextFreeIdForResourceType(ExistingIdsWithType, NextFreeId, Resources[Index].ResourceType);
+      Resources[Index].Id := FindNextFreeIdForResourceType(ExistingIdsWithType, IdOffset, Resources[Index].ResourceType);
       ExistingIdsWithType.Add(Resources[Index].Id, Resources[Index].ResourceType);
-      NextFreeId := Resources[Index].Id + 1;
       Log.Append('Added new ID: ' + UIntToStr(Resources[Index].Id));
     end;
 
