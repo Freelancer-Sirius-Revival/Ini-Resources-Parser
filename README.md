@@ -33,6 +33,16 @@ The tool will then use the exact same IDs here instead of making a new text. Thi
 
 The names must be unique through all files. They are case insensitive.
 
+## Knowledge DB Entries
+
+To link "knowledge" entries (`rumor`, `rumor_type2` and `know`) they must be followed on the same line by `;knowdb <list of nicknames>`.
+
+Example:
+```
+rumor = base_0_rank, mission_end, 1, 131196 ;knowdb li01_01, li01
+```
+
+
 ## Format of Text
 
 The formatting of any text is following exactly the same rules as adoxa's FRC wants it. Its readme describes it as:
@@ -72,16 +82,18 @@ White     FFFFFF        w    FFFFFF
 
 ## Adding Text to the Keys
 
-Find the line you want to add the resource text and you want to have automatically get a new ID. Then simply make a new line below it starting with one of the Keys. After that you must start each line of the resource text with a commentary symbol and a space following after ( `;_` ). The actual ID of the entry will be automatically adjusted later and does not matter for editing here.
+Find the line you want to add the resource text to. Then simply make a new line below it starting with one of the Keys. After that you must start each line of the resource text with a commentary symbol and a space following after ( `; ` ).
+
+Set your ID to `0` to let the tool assign a new one. If you leave the existing ID, the tool will update the actual text behind it.
 
 Example:
 ```
 [Weapon]
 nickname = gun_mark01
-ids_name = 1
+ids_name = 0
 ;res str
 ; Big Bang Gun
-ids_info = 2
+ids_info = 0
 ;res html
 ; \bBold Heading\B
 ; \mCentered Text\l
@@ -100,7 +112,7 @@ With this the resource text "Starflier" will be automatically assigned to the pr
 Some values like `firstname_male` accept an entire range of IDs. This can be done by simply writing multiple resource blocks below the line:
 
 ```
-firstname_male = 1, 100
+firstname_male = 0, 0
 ;res str
 ; Hans
 ;res str
@@ -138,10 +150,10 @@ To create those two related infocards for a base, simply add two resource blocks
 ```
 [Object]
 nickname = li01_01_Base
-ids_name = 1
+ids_name = 0
 ;res str
 ; Planet Manhatten
-ids_info = 1
+ids_info = 0
 ;res html
 ; Diameter: 500km
 ; Mass: 3*10^8kg
@@ -171,12 +183,12 @@ and then later referenced by:
 ```
 [Ship]
 nickname = ge_fighter
-ids_name = 1
+ids_name = 0
 ;res str
 ; Starflier
-ids_info2 = 1
+ids_info2 = 0
 ;res $ShipStats
-ids_info3 = 1
+ids_info3 = 0
 ...
 ```
 
@@ -188,7 +200,7 @@ Again, for those simply add multiple resource blocks to the relevant entries. Th
 
 ```
 [Zone]
-ids_name = 1
+ids_name = 0
 ;res str
 ; Badlands
 ;res str
