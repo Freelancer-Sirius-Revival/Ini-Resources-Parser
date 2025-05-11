@@ -186,19 +186,19 @@ var
           'rumor':
           begin
             ValueParts := LineParts[1].Split(',');
-            if Length(ValueParts) > 3 then
+            if Length(ValueParts) > 2 then
               Line := LineParts[0] + '=' + ValueParts[0] + ',' + ValueParts[1] + ',' + ValueParts[2] + ', ' + IntToStr(ResourcesOfCurrentLine[0].Id);
           end;           
           'rumor_type2':
           begin
             ValueParts := LineParts[1].Split(',');
-            if Length(ValueParts) > 3 then
+            if Length(ValueParts) > 2 then
               Line := LineParts[0] + '=' + ValueParts[0] + ',' + ValueParts[1] + ',' + ValueParts[2] + ', ' + IntToStr(ResourcesOfCurrentLine[0].Id);
           end;
           'know':
           begin
             ValueParts := LineParts[1].Split(',');
-            if Length(ValueParts) > 3 then
+            if (Length(ValueParts) > 3) and (Length(ResourcesOfCurrentLine) > 1) then
               Line := LineParts[0] + '=' + IntToStr(ResourcesOfCurrentLine[0].Id) + ',' + IntToStr(ResourcesOfCurrentLine[1].Id) + ',' + ValueParts[2] + ', ' + ValueParts[3];
           end;
           'firstname_male',
@@ -207,12 +207,13 @@ var
           'formation_desig',
           'large_ship_names':
           begin
-            Line := LineParts[0] + '= ' + IntToStr(ResourcesOfCurrentLine[0].Id) + ', ' + IntToStr(ResourcesOfCurrentLine[High(ResourcesOfCurrentLine)].Id);
+            if Length(ResourcesOfCurrentLine) > 1 then
+              Line := LineParts[0] + '= ' + IntToStr(ResourcesOfCurrentLine[0].Id) + ', ' + IntToStr(ResourcesOfCurrentLine[High(ResourcesOfCurrentLine)].Id);
           end;
           'rank_desig':
           begin
             ValueParts := LineParts[1].Split(',');
-            if (Length(ValueParts) > 4) and (Length(ResourcesOfCurrentLine) > 1) then
+            if (Length(ValueParts) > 4) and (Length(ResourcesOfCurrentLine) > 2) then
               Line := LineParts[0] + '= ' + IntToStr(ResourcesOfCurrentLine[0].Id) + ', ' + IntToStr(ResourcesOfCurrentLine[1].Id) + ', ' + IntToStr(ResourcesOfCurrentLine[2].Id) + ',' + ValueParts[3] + ',' + ValueParts[4];
           end;
           'ids_info':
