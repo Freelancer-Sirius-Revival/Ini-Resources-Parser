@@ -39,7 +39,7 @@ const
 procedure TMainForm.FormCreate(Sender: TObject);
 begin
   if SelectDirectoryDialog.Execute then
-    Process(SelectDirectoryDialog.FileName, IdOffset, 'resources.frc', WarningsListBox.Items);
+    Process(SelectDirectoryDialog.FileName, IdOffset, 'FLSR-Texts.frc', WarningsListBox.Items);
 end;
 
 end.
