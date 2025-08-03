@@ -195,6 +195,7 @@ var
   Line: String;
   LineParts: TStringArray = nil;
   ValueParts: TStringArray = nil;
+  ValueIndex: ValSInt;
   Commentary: String;
 begin
   if Assigned(FileStrings) and (FileStringsLineNumber >= 0) and (Length(Resources) > 0) then
@@ -221,7 +222,7 @@ begin
         end;
         'know':
         begin
-          ValueParts := LineParts[1].Split(',');
+          ValueParts := LineParts[1].Split(';')[0].Split(',');
           if (Length(ValueParts) > 3) and (Length(Resources) > 1) then
             Line := LineParts[0] + '=' + UIntToStr(Resources[0].Id) + ',' + UIntToStr(Resources[1].Id) + ',' + ValueParts[2] + ', ' + ValueParts[3] + Commentary;
         end;
@@ -236,15 +237,52 @@ begin
         end;
         'rank_desig':
         begin
-          ValueParts := LineParts[1].Split(',');
+          ValueParts := LineParts[1].Split(';')[0].Split(',');
           if (Length(ValueParts) > 4) and (Length(Resources) > 2) then
             Line := LineParts[0] + '= ' + UIntToStr(Resources[0].Id) + ', ' + UIntToStr(Resources[1].Id) + ', ' + UIntToStr(Resources[2].Id) + ',' + ValueParts[3] + ',' + ValueParts[4] + Commentary;
         end;
         'ids_info':
         begin
-          Line := LineParts[0] + '= ' + UIntToStr(Resources[0].Id);
+          Line := LineParts[0] + '= ' + UIntToStr(Resources[0].Id) + Commentary;
           if Assigned(InfocardMap.Strings) and (Length(Resources) > 1) then
-            InfocardMap.Strings.Append('map = ' + UIntToStr(Resources[0].Id) + ', ' + UIntToStr(Resources[1].Id) + Commentary);
+            InfocardMap.Strings.Append('map = ' + UIntToStr(Resources[0].Id) + ', ' + UIntToStr(Resources[1].Id));
+        end;
+        'act_changestate',
+        'act_setnnobj':
+        begin
+          ValueParts := LineParts[1].Split(';')[0].Split(',');
+          if Length(ValueParts) > 0 then
+          begin
+            Line := LineParts[0] + '=' + ValueParts[0] + ', ' + UIntToStr(Resources[0].Id);
+            for ValueIndex := 2 to High(ValueParts) do
+              Line := Line + ', ' + ValueParts[ValueIndex].Trim;
+            Line := Line + Commentary;
+          end;
+        end;
+        'act_ethercomm':
+        begin     
+          ValueParts := LineParts[1].Split(';')[0].Split(',');      
+          if Length(ValueParts) > 0 then
+          begin
+            Line := LineParts[0] + '=' + ValueParts[0];
+            for ValueIndex := 1 to High(ValueParts) do
+              if (ValueParts[ValueIndex - 1].Trim.ToLower = 'true') or (ValueParts[ValueIndex - 1].Trim.ToLower = 'false') then
+                Line := Line + ', ' + UIntToStr(Resources[0].Id)
+              else
+                Line := Line + ', ' + ValueParts[ValueIndex].Trim;
+            Line := Line + Commentary;
+          end;
+        end;          
+        'ethersender':
+        begin
+          ValueParts := LineParts[1].Split(';')[0].Split(',');
+          if Length(ValueParts) > 2 then
+          begin
+            Line := LineParts[0] + '=' + ValueParts[0] + ', ' + ValueParts[1] + ', ' + UIntToStr(Resources[0].Id);
+            for ValueIndex := 3 to High(ValueParts) do
+              Line := Line + ', ' + ValueParts[ValueIndex].Trim;
+            Line := Line + Commentary;
+          end;
         end;
         else
           Line := LineParts[0] + '= ' + UIntToStr(Resources[0].Id) + Commentary;
@@ -295,6 +333,7 @@ var
   LineNumber: ValSInt;
   LineParts: TStringArray = nil;
   ValueParts: TStringArray = nil;
+  ValuePartsIndex: ValSInt;
   ParentLineNumber: ValSInt = -1;
   FoundResourceType: TResourceType = TResourceType.NoType;
   ResourceContent: TStringList;
@@ -340,6 +379,26 @@ begin
             if Length(ValueParts) > 3 then
               TryStrToUInt(ValueParts[3].Trim, ExistingId);
           end;
+          'act_changestate',
+          'act_setnnobj':
+          begin
+            if Length(ValueParts) > 1 then
+              TryStrToUInt(ValueParts[1].Trim, ExistingId);
+          end;          
+          'act_ethercomm':
+          begin
+            for ValuePartsIndex := 6 to High(ValueParts) do 
+              if (ValueParts[ValuePartsIndex - 1].Trim = 'true') or (ValueParts[ValuePartsIndex - 1].Trim = 'false') then
+              begin
+                TryStrToUInt(ValueParts[ValuePartsIndex].Trim, ExistingId);
+                Break;
+              end;
+          end;
+          'ethersender':
+          begin
+            if Length(ValueParts) > 2 then
+              TryStrToUInt(ValueParts[2].Trim, ExistingId);
+          end
           else
             TryStrToUInt(ValueParts[0].Trim, ExistingId);
         end;
