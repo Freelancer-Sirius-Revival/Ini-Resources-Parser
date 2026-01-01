@@ -349,10 +349,13 @@ begin
     Line := Strings.Strings[LineNumber].TrimLeft;
 
     // If we had found a resource and it does end, save the resource strings and reset the state.
+    // For resources with ranges (e.g. faction pilot names) this will be looped multiple times with the same ParentLineNumber.
     if (FoundResourceType <> TResourceType.NoType) and (not Line.StartsWith(';') or Line.StartsWith(StringIdentifier) or Line.StartsWith(HtmlIdentifier) or not Line.StartsWith('; ')) then
     begin
       AddFileResource(Strings, ParentLineNumber, ResourceContent, FoundResourceType, FoundMetaName, ExistingId);
-      ExistingId := ExistingId + 1;
+      // Only increment if the currently found ID is actually already known. This is important for resources with ranges (e.g. faction pilot names).
+      if (ExistingId <> 0) then
+        ExistingId := ExistingId + 1;
       ResourceContent.Clear;
       FoundResourceType := TResourceType.NoType;
     end;
