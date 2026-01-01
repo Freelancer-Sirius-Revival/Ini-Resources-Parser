@@ -224,7 +224,7 @@ begin
         begin
           ValueParts := LineParts[1].Split(';')[0].Split(',');
           if (Length(ValueParts) > 3) and (Length(Resources) > 1) then
-            Line := LineParts[0] + '=' + UIntToStr(Resources[0].Id) + ',' + UIntToStr(Resources[1].Id) + ',' + ValueParts[2] + ', ' + ValueParts[3] + Commentary;
+            Line := LineParts[0] + '=' + UIntToStr(Resources[0].Id) + ',' + UIntToStr(Resources[1].Id) + ',' + ValueParts[2] + ',' + ValueParts[3] + Commentary;
         end;
         'firstname_male',
         'firstname_female',
@@ -255,7 +255,7 @@ begin
           begin
             Line := LineParts[0] + '=' + ValueParts[0] + ', ' + UIntToStr(Resources[0].Id);
             for ValueIndex := 2 to High(ValueParts) do
-              Line := Line + ', ' + ValueParts[ValueIndex].Trim;
+              Line := Line + ',' + ValueParts[ValueIndex];
             Line := Line + Commentary;
           end;
         end;
@@ -269,7 +269,7 @@ begin
               if (ValueParts[ValueIndex - 1].Trim.ToLower = 'true') or (ValueParts[ValueIndex - 1].Trim.ToLower = 'false') then
                 Line := Line + ', ' + UIntToStr(Resources[0].Id)
               else
-                Line := Line + ', ' + ValueParts[ValueIndex].Trim;
+                Line := Line + ',' + ValueParts[ValueIndex];
             Line := Line + Commentary;
           end;
         end;          
@@ -278,9 +278,9 @@ begin
           ValueParts := LineParts[1].Split(';')[0].Split(',');
           if Length(ValueParts) > 2 then
           begin
-            Line := LineParts[0] + '=' + ValueParts[0] + ', ' + ValueParts[1] + ', ' + UIntToStr(Resources[0].Id);
+            Line := LineParts[0] + '=' + ValueParts[0] + ',' + ValueParts[1] + ', ' + UIntToStr(Resources[0].Id);
             for ValueIndex := 3 to High(ValueParts) do
-              Line := Line + ', ' + ValueParts[ValueIndex].Trim;
+              Line := Line + ',' + ValueParts[ValueIndex];
             Line := Line + Commentary;
           end;
         end;
