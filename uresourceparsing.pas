@@ -35,6 +35,7 @@ type
     ResourceType: TResourceType;
     MetaName: String;
     Id: Uint32;
+    SequentialResourcesFirstIndex: ValSInt;
   end;
   TFileResourceLinkArray = array of TFileResourceLink;
 
@@ -68,11 +69,12 @@ begin
   AppendLog(ResourceLink.FileStrings, ResourceLink.FileStringsLineNumber, Text);
 end;
 
-procedure AddFileResource(const FileStrings: PFileStrings; const FileStringsLineNumber: ValSInt; const Resource: TStringList; const ResourceType: TResourceType; const MetaName: String; const ExistingId: Uint32);
+function AddFileResource(const FileStrings: PFileStrings; const FileStringsLineNumber: ValSInt; const Resource: TStringList; const ResourceType: TResourceType; const MetaName: String; const ExistingId: Uint32; const SequentialResourcesFirstIndex: ValSInt): ValSInt;
 var
   Entry: ^TFileResourceLink;
 begin
-  SetLength(Resources, Length(Resources) + 1);
+  Result := Length(Resources);
+  SetLength(Resources, Result + 1);
   Entry := @Resources[High(Resources)];
   Entry^.FileStrings := FileStrings;
   Entry^.FileStringsLineNumber := FileStringsLineNumber;
@@ -86,6 +88,7 @@ begin
   Entry^.ResourceType := ResourceType;
   Entry^.MetaName := MetaName;
   Entry^.Id := ExistingId;
+  Entry^.SequentialResourcesFirstIndex := SequentialResourcesFirstIndex;
 end;
 
 type
@@ -118,7 +121,7 @@ begin
   Result := NextFreeId;
 end;
 
-procedure LinkResourcesWithIds(const Resources: TFileResourceLinkArray; const IdOffset: Uint32; const Log: TStrings);
+procedure LinkResourcesWithIds(const Resources: TFileResourceLinkArray; const IdOffset: Uint32);
 var
   Index: ValSInt;
   MetaIndex: ValSInt;
@@ -127,6 +130,11 @@ var
   NextId: ValSInt;
   ExistingIdsWithType: TUint32ResourceTypeMap;
 begin
+  // Sequential resources will be reset to make sure any change to the number of their entries will be re-evaluated.
+  for Index := 0 to High(Resources) do
+    if Resources[Index].SequentialResourcesFirstIndex >= 0 then
+      Resources[Index].Id := 0;
+
   // Collect all already existing IDs
   ExistingIdsWithType := TUint32ResourceTypeMap.Create;
   for Index := 0 to High(Resources) do
@@ -140,29 +148,40 @@ begin
     end;
 
   for Index := 0 to High(Resources) do
-    if (Resources[Index].ResourceType = TResourceType.StringType) and (Resources[Index].Id = 0) then
+    if ((Resources[Index].ResourceType = TResourceType.StringType) and (Resources[Index].Id = 0)) then
     begin
       for SameResourceCount := 0 to High(Resources) - Index do
         if (Resources[Index].FileStrings <> Resources[Index + SameResourceCount].FileStrings) or (Resources[Index].FileStringsLineNumber <> Resources[Index + SameResourceCount].FileStringsLineNumber) then
           Break;
 
-      // Find a block of continous free IDs
-      NextId := FindNextFreeIdForResourceType(ExistingIdsWithType, IdOffset, Resources[Index].ResourceType);
-      ContinousIdCount := 1;
-      while ContinousIdCount < SameResourceCount do
+      // Resources usually just need their isolated ID slot. Find it.
+      if Resources[Index].SequentialResourcesFirstIndex < 0 then
       begin
-        if NextId + ContinousIdCount = FindNextFreeIdForResourceType(ExistingIdsWithType, NextId + ContinousIdCount, Resources[Index].ResourceType) then
-          ContinousIdCount := ContinousIdCount + 1
-        else
+        NextId := FindNextFreeIdForResourceType(ExistingIdsWithType, IdOffset, Resources[Index].ResourceType);
+      end
+      // Find a block of continous free IDs for resources that must be sequential.
+      else if Resources[Index].SequentialResourcesFirstIndex = Index then
+      begin
+        NextId := FindNextFreeIdForResourceType(ExistingIdsWithType, IdOffset, Resources[Index].ResourceType);
+        ContinousIdCount := 1;
+        while ContinousIdCount < SameResourceCount do
         begin
-          NextId := FindNextFreeIdForResourceType(ExistingIdsWithType, NextId + ContinousIdCount + 1, Resources[Index].ResourceType);
-          ContinousIdCount := 1;
+          if NextId + ContinousIdCount = FindNextFreeIdForResourceType(ExistingIdsWithType, NextId + ContinousIdCount, Resources[Index].ResourceType) then
+            ContinousIdCount := ContinousIdCount + 1
+          else
+          begin
+            NextId := FindNextFreeIdForResourceType(ExistingIdsWithType, NextId + ContinousIdCount + 1, Resources[Index].ResourceType);
+            ContinousIdCount := 1;
+          end;
         end;
-      end;
+      end
+      // Following resources of a sequential list will always use their parent's ID as offset. This should always give a continuous block.
+      else
+        NextId := FindNextFreeIdForResourceType(ExistingIdsWithType, Resources[Resources[Index].SequentialResourcesFirstIndex].Id, Resources[Index].ResourceType);
 
       Resources[Index].Id := NextId;
       ExistingIdsWithType.Add(Resources[Index].Id, Resources[Index].ResourceType);
-      AppendLog(Resources[Index], 'Added new ID: ' + UIntToStr(Resources[Index].Id));
+      AppendLog(Resources[Index], 'Assigned ID: ' + UIntToStr(Resources[Index].Id));
     end;
 
   for Index := 0 to High(Resources) do
@@ -233,21 +252,21 @@ begin
         end;
         'ids_info':
         begin
-          if (Length(Resources) > 2) then
+          if Length(Resources) > 2 then
             AppendLog(FileStrings, FileStringsLineNumber, 'Too many subsequent resources. Allowed: First for the general text and second for a extensive base description resource.');
         end;
         'rank_desig':
         begin
-          if (Length(Resources) <> 3) then
+          if Length(Resources) <> 3 then
             AppendLog(FileStrings, FileStringsLineNumber, 'Not matching resources count. Allowed: Three pilot rank names.');
         end;
         'know':
         begin   
-          if (Length(Resources) <> 2) then
+          if Length(Resources) <> 2 then
             AppendLog(FileStrings, FileStringsLineNumber, 'Not matching resources count. Allowed: First for the general text before accepting to buy the knowledge. Second for the additional text to be displayed upon buying the knowledge.');
         end;
         else               
-          if (Length(Resources) <> 1) then
+          if Length(Resources) <> 1 then
             AppendLog(FileStrings, FileStringsLineNumber, 'Not matching resources count. Must be exactly one.');
       end;
 
@@ -385,6 +404,9 @@ var
   ResourceContent: TStringList;
   FoundMetaName: String = '';
   ExistingId: Uint32 = 0;
+  SequentialResourcesRequested: Boolean = False;
+  SequentialResourcesFirstIndex: ValSInt = -1;
+  AddedFileResourceIndex: ValSInt;
 begin
   ResourceContent := TStringList.Create;
 
@@ -398,9 +420,14 @@ begin
     // For resources with ranges (e.g. faction pilot names) this will be looped multiple times with the same ParentLineNumber.
     if (FoundResourceType <> TResourceType.NoType) and (not Line.StartsWith(';') or Line.StartsWith(StringIdentifier) or Line.StartsWith(HtmlIdentifier) or not Line.StartsWith('; ')) then
     begin
-      AddFileResource(FileStrings, ParentLineNumber, ResourceContent, FoundResourceType, FoundMetaName, ExistingId);
+      AddedFileResourceIndex := AddFileResource(FileStrings, ParentLineNumber, ResourceContent, FoundResourceType, FoundMetaName, ExistingId, SequentialResourcesFirstIndex);
+      if (SequentialResourcesRequested and (SequentialResourcesFirstIndex < 0)) then
+      begin
+        SequentialResourcesFirstIndex := AddedFileResourceIndex;
+        Resources[AddedFileResourceIndex].SequentialResourcesFirstIndex := AddedFileResourceIndex;
+      end;
       // Only increment if the currently found ID is actually already known. This is important for resources with ranges (e.g. faction pilot names).
-      if (ExistingId <> 0) then
+      if ExistingId <> 0 then
         ExistingId := ExistingId + 1;
       ResourceContent.Clear;
       FoundResourceType := TResourceType.NoType;
@@ -410,6 +437,7 @@ begin
     if not Line.StartsWith(';') then
     begin
       Assert(FoundResourceType = TResourceType.NoType);
+      SequentialResourcesFirstIndex := -1;
       ParentLineNumber := LineNumber;
       ExistingId := 0;
       ValueParts := nil;
@@ -451,6 +479,20 @@ begin
           else
             TryStrToUInt(ValueParts[0].Trim, ExistingId);
         end;
+
+        case LineParts[0].Trim of
+          //'ids_name',
+          'firstname_male',
+          'firstname_female',
+          'lastname',
+          'formation_desig',
+          'large_ship_names':
+          begin
+            SequentialResourcesRequested := True;
+          end;
+          else
+            SequentialResourcesRequested := False;
+        end;
       end;
       Continue;
     end;
@@ -481,14 +523,17 @@ begin
     // If the line starts with an identifier for linked resources.
     if Line.StartsWith(LinkIdentifier) then
     begin
-      AddFileResource(FileStrings, ParentLineNumber, nil, TResourceType.LinkType, Line.Substring(Length(LinkIdentifier)).Trim, 0);
+      if SequentialResourcesRequested then
+        AppendLog(FileStrings, ParentLineNumber, 'No resource linking allowed for resources that must be defined sequentially.')
+      else
+        AddFileResource(FileStrings, ParentLineNumber, nil, TResourceType.LinkType, Line.Substring(Length(LinkIdentifier)).Trim, 0, -1);
       Continue;
     end;
   end;
 
   // If we had found a resource and the file does end, save the resource strings and reset the state.
-  if (FoundResourceType <> TResourceType.NoType) then
-    AddFileResource(FileStrings, ParentLineNumber, ResourceContent, FoundResourceType, '', ExistingId);
+  if FoundResourceType <> TResourceType.NoType then
+    AddFileResource(FileStrings, ParentLineNumber, ResourceContent, FoundResourceType, '', ExistingId, SequentialResourcesFirstIndex);
 
   ResourceContent.Free;
 end;
@@ -815,7 +860,7 @@ begin
     FindResources(@IniFilesStrings[Index]);
 
   AppendLog('Creating IDs from ' + IntToStr(Length(Resources)) + ' resource blocks...');
-  LinkResourcesWithIds(Resources, IdOffset, Log);
+  LinkResourcesWithIds(Resources, IdOffset);
 
   AppendLog('Writing IDs into .ini files...');
   ApplyIdsToFiles(Resources);
