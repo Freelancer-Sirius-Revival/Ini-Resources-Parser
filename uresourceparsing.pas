@@ -9,7 +9,7 @@ uses
   SysUtils,
   Generics.Collections;
 
-procedure Process(const DirectoryPath: String; const IdOffset: Uint32; const OutputFileName: String; const Log: TStrings);
+procedure Process(const DirectoryPath: String; const IdOffset: Uint32; const OutputFileName: String; const GuiLog: TStrings);
 
 implementation
 
@@ -23,12 +23,13 @@ type
     FileName: String;
     Strings: TStringList;
   end;
+  PFileStrings = ^TFileStrings;
   TFileStringsArray = array of TFileStrings;
 
   TResourceType = (NoType, StringType, HtmlType, LinkType);
 
   TFileResourceLink = record
-    FileStrings: TStringList;
+    FileStrings: PFileStrings;
     FileStringsLineNumber: ValSInt;
     Resource: TStringList;
     ResourceType: TResourceType;
@@ -50,8 +51,24 @@ var
   Resources: TFileResourceLinkArray = nil;
   InfocardMap: TFileStrings = (FileName: ''; Strings: nil);
   KnowledgeMap: TFileStrings = (FileName: ''; Strings: nil);
+  Log: TStrings = nil;
 
-procedure AddFileResource(const FileStrings: TStringList; const FileStringsLineNumber: ValSInt; const Resource: TStringList; const ResourceType: TResourceType; const MetaName: String; const ExistingId: Uint32);
+procedure AppendLog(const Text: String);
+begin
+  Log.Append(Text);
+end;
+
+procedure AppendLog(const FileStrings: PFileStrings; const FileStringsLineNumber: ValSInt; const Text: String);
+begin
+  Log.Append(FileStrings^.FileName + ' #' + IntToStr(FileStringsLineNumber) + ': ' + Text);
+end;
+
+procedure AppendLog(constref ResourceLink: TFileResourceLink; const Text: String);
+begin
+  AppendLog(ResourceLink.FileStrings, ResourceLink.FileStringsLineNumber, Text);
+end;
+
+procedure AddFileResource(const FileStrings: PFileStrings; const FileStringsLineNumber: ValSInt; const Resource: TStringList; const ResourceType: TResourceType; const MetaName: String; const ExistingId: Uint32);
 var
   Entry: ^TFileResourceLink;
 begin
@@ -105,7 +122,7 @@ procedure LinkResourcesWithIds(const Resources: TFileResourceLinkArray; const Id
 var
   Index: ValSInt;
   MetaIndex: ValSInt;
-  SameResourceCount: ValSInt;         
+  SameResourceCount: ValSInt;
   ContinousIdCount: ValSInt;
   NextId: ValSInt;
   ExistingIdsWithType: TUint32ResourceTypeMap;
@@ -118,7 +135,7 @@ begin
       try
         ExistingIdsWithType.Add(Resources[Index].Id, Resources[Index].ResourceType);
       except
-        On EListError do Log.Append('ID duplicated! ' + UIntToStr(Resources[Index].Id));
+        On EListError do AppendLog(Resources[Index], 'ID duplicated! ' + UIntToStr(Resources[Index].Id));
       end;
     end;
 
@@ -130,14 +147,14 @@ begin
           Break;
 
       // Find a block of continous free IDs
-      NextId := FindNextFreeIdForResourceType(ExistingIdsWithType, IdOffset, Resources[Index].ResourceType);            
+      NextId := FindNextFreeIdForResourceType(ExistingIdsWithType, IdOffset, Resources[Index].ResourceType);
       ContinousIdCount := 1;
       while ContinousIdCount < SameResourceCount do
       begin
         if NextId + ContinousIdCount = FindNextFreeIdForResourceType(ExistingIdsWithType, NextId + ContinousIdCount, Resources[Index].ResourceType) then
           ContinousIdCount := ContinousIdCount + 1
         else
-        begin                
+        begin
           NextId := FindNextFreeIdForResourceType(ExistingIdsWithType, NextId + ContinousIdCount + 1, Resources[Index].ResourceType);
           ContinousIdCount := 1;
         end;
@@ -145,7 +162,7 @@ begin
 
       Resources[Index].Id := NextId;
       ExistingIdsWithType.Add(Resources[Index].Id, Resources[Index].ResourceType);
-      Log.Append('Added new ID: ' + UIntToStr(Resources[Index].Id));
+      AppendLog(Resources[Index], 'Added new ID: ' + UIntToStr(Resources[Index].Id));
     end;
 
   for Index := 0 to High(Resources) do
@@ -153,7 +170,7 @@ begin
     begin
       Resources[Index].Id := FindNextFreeIdForResourceType(ExistingIdsWithType, IdOffset, Resources[Index].ResourceType);
       ExistingIdsWithType.Add(Resources[Index].Id, Resources[Index].ResourceType);
-      Log.Append('Added new ID: ' + UIntToStr(Resources[Index].Id));
+      AppendLog(Resources[Index], 'Added new ID: ' + UIntToStr(Resources[Index].Id));
     end;
 
   // Link all ids that want other ids that are already existing.
@@ -190,7 +207,7 @@ begin
     end;
 end;
 
-procedure AssignIdToLine(const FileStrings: TStringList; const FileStringsLineNumber: ValSInt; const Resources: TFileResourceLinkArray);
+procedure AssignIdToLine(const FileStrings: PFileStrings; const FileStringsLineNumber: ValSInt; const Resources: TFileResourceLinkArray);
 var
   Line: String;
   LineParts: TStringArray = nil;
@@ -200,10 +217,40 @@ var
 begin
   if Assigned(FileStrings) and (FileStringsLineNumber >= 0) and (Length(Resources) > 0) then
   begin
-    Line := FileStrings.Strings[FileStringsLineNumber];
+    Line := FileStrings^.Strings.Strings[FileStringsLineNumber];
     LineParts := Line.Split('=');
     if Length(LineParts) > 1 then
     begin
+      case LineParts[0].Trim.ToLower of
+        'ids_name',
+        'firstname_male',
+        'firstname_female',
+        'lastname',
+        'formation_desig',
+        'large_ship_names':
+        begin
+          Assert(Length(Resources) >= 1);
+        end;
+        'ids_info':
+        begin
+          if (Length(Resources) > 2) then
+            AppendLog(FileStrings, FileStringsLineNumber, 'Too many subsequent resources. Allowed: First for the general text and second for a extensive base description resource.');
+        end;
+        'rank_desig':
+        begin
+          if (Length(Resources) <> 3) then
+            AppendLog(FileStrings, FileStringsLineNumber, 'Not matching resources count. Allowed: Three pilot rank names.');
+        end;
+        'know':
+        begin   
+          if (Length(Resources) <> 2) then
+            AppendLog(FileStrings, FileStringsLineNumber, 'Not matching resources count. Allowed: First for the general text before accepting to buy the knowledge. Second for the additional text to be displayed upon buying the knowledge.');
+        end;
+        else               
+          if (Length(Resources) <> 1) then
+            AppendLog(FileStrings, FileStringsLineNumber, 'Not matching resources count. Must be exactly one.');
+      end;
+
       Commentary := '';
       if Line.Contains(';') then
         Commentary := ' ' + Line.Substring(Line.IndexOf(';'));
@@ -232,8 +279,7 @@ begin
         'formation_desig',
         'large_ship_names':
         begin
-          if Length(Resources) > 1 then
-            Line := LineParts[0] + '= ' + UIntToStr(Resources[0].Id) + ', ' + UIntToStr(Resources[High(Resources)].Id) + Commentary;
+          Line := LineParts[0] + '= ' + UIntToStr(Resources[0].Id) + ', ' + UIntToStr(Resources[High(Resources)].Id) + Commentary;
         end;
         'rank_desig':
         begin
@@ -260,8 +306,8 @@ begin
           end;
         end;
         'act_ethercomm':
-        begin     
-          ValueParts := LineParts[1].Split(';')[0].Split(',');      
+        begin
+          ValueParts := LineParts[1].Split(';')[0].Split(',');
           if Length(ValueParts) > 0 then
           begin
             Line := LineParts[0] + '=' + ValueParts[0];
@@ -272,7 +318,7 @@ begin
                 Line := Line + ',' + ValueParts[ValueIndex];
             Line := Line + Commentary;
           end;
-        end;          
+        end;
         'ethersender':
         begin
           ValueParts := LineParts[1].Split(';')[0].Split(',');
@@ -287,7 +333,7 @@ begin
         else
           Line := LineParts[0] + '= ' + UIntToStr(Resources[0].Id) + Commentary;
       end;
-      FileStrings.Strings[FileStringsLineNumber] := Line;
+      FileStrings^.Strings.Strings[FileStringsLineNumber] := Line;
     end;
   end;
 end;
@@ -295,7 +341,7 @@ end;
 procedure ApplyIdsToFiles(const Resources: TFileResourceLinkArray);
 var
   Resource: TFileResourceLink;
-  CurrentFileStrings: TStringList = nil;
+  CurrentFileStrings: PFileStrings = nil;
   CurrentFileStringsLineNumber: ValSInt = -1;
   ResourcesOfCurrentLine: TFileResourceLinkArray = nil;
 begin
@@ -323,7 +369,7 @@ begin
     FileStrings.Strings.SaveToFile(FileStrings.FileName);
 end;
 
-procedure FindResources(const Strings: TStringList);
+procedure FindResources(const FileStrings: PFileStrings);
 const
   StringIdentifier = ';res str';
   HtmlIdentifier = ';res html';
@@ -343,16 +389,16 @@ begin
   ResourceContent := TStringList.Create;
 
   // Search through each line of the file.
-  for LineNumber := 0 to Strings.Count - 1 do
+  for LineNumber := 0 to FileStrings^.Strings.Count - 1 do
   begin
     SetLength(LineParts, 0);
-    Line := Strings.Strings[LineNumber].TrimLeft;
+    Line := FileStrings^.Strings.Strings[LineNumber].TrimLeft;
 
     // If we had found a resource and it does end, save the resource strings and reset the state.
     // For resources with ranges (e.g. faction pilot names) this will be looped multiple times with the same ParentLineNumber.
     if (FoundResourceType <> TResourceType.NoType) and (not Line.StartsWith(';') or Line.StartsWith(StringIdentifier) or Line.StartsWith(HtmlIdentifier) or not Line.StartsWith('; ')) then
     begin
-      AddFileResource(Strings, ParentLineNumber, ResourceContent, FoundResourceType, FoundMetaName, ExistingId);
+      AddFileResource(FileStrings, ParentLineNumber, ResourceContent, FoundResourceType, FoundMetaName, ExistingId);
       // Only increment if the currently found ID is actually already known. This is important for resources with ranges (e.g. faction pilot names).
       if (ExistingId <> 0) then
         ExistingId := ExistingId + 1;
@@ -387,10 +433,10 @@ begin
           begin
             if Length(ValueParts) > 1 then
               TryStrToUInt(ValueParts[1].Trim, ExistingId);
-          end;          
+          end;
           'act_ethercomm':
           begin
-            for ValuePartsIndex := 6 to High(ValueParts) do 
+            for ValuePartsIndex := 6 to High(ValueParts) do
               if (ValueParts[ValuePartsIndex - 1].Trim = 'true') or (ValueParts[ValuePartsIndex - 1].Trim = 'false') then
               begin
                 TryStrToUInt(ValueParts[ValuePartsIndex].Trim, ExistingId);
@@ -435,14 +481,14 @@ begin
     // If the line starts with an identifier for linked resources.
     if Line.StartsWith(LinkIdentifier) then
     begin
-      AddFileResource(Strings, ParentLineNumber, nil, TResourceType.LinkType, Line.Substring(Length(LinkIdentifier)).Trim, 0);
+      AddFileResource(FileStrings, ParentLineNumber, nil, TResourceType.LinkType, Line.Substring(Length(LinkIdentifier)).Trim, 0);
       Continue;
     end;
   end;
 
   // If we had found a resource and the file does end, save the resource strings and reset the state.
   if (FoundResourceType <> TResourceType.NoType) then
-    AddFileResource(Strings, ParentLineNumber, ResourceContent, FoundResourceType, '', ExistingId);
+    AddFileResource(FileStrings, ParentLineNumber, ResourceContent, FoundResourceType, '', ExistingId);
 
   ResourceContent.Free;
 end;
@@ -472,10 +518,10 @@ begin
   end;
 end;
 
-function CollectAllExplorationEntities(const FilesStrings: TFileStringsArray; const IdOffset: Uint32; const Log: TStrings): TGameExplorationMap;
+function CollectAllExplorationEntities(const FilesStrings: TFileStringsArray; const IdOffset: Uint32): TGameExplorationMap;
 var
   FileStrings: TFileStrings;
-  LineNumber: ValSInt;    
+  LineNumber: ValSInt;
   BlockStart: ValSInt;
   BlockEnd: ValSInt;
   Entry: TGameExploration;
@@ -484,7 +530,7 @@ var
 begin
   Result := TGameExplorationMap.Create;
   for FileStrings in FilesStrings do
-  begin                                 
+  begin
     LineNumber := 0;
     while LineNumber < FileStrings.Strings.Count - 1 do
     begin
@@ -545,25 +591,25 @@ begin
             if Entry.Nickname.IsEmpty then
               Continue;
             if TryStrToUInt(FindKeyValue(FileStrings.Strings, BlockStart, BlockEnd, 'ids_name'), Id) or (Id <= 1) then
-            if Id < IdOffset then
-            begin
-              SetLength(Entry.Ids, 5);
-              Entry.Ids[0] := Id;
-              Id := Id + 131834; // Offset to grammatical case versions
-              for Index := 1 to High(Entry.Ids) do
+              if Id < IdOffset then
               begin
-                Entry.Ids[Index] := Id;
-                Id := Id + 100;
+                SetLength(Entry.Ids, 5);
+                Entry.Ids[0] := Id;
+                Id := Id + 131834; // Offset to grammatical case versions
+                for Index := 1 to High(Entry.Ids) do
+                begin
+                  Entry.Ids[Index] := Id;
+                  Id := Id + 100;
+                end;
+              end
+              else
+              begin
+                SetLength(Entry.Ids, 4);
+                Entry.Ids[0] := Id;
+                Entry.Ids[1] := Id + 1;
+                Entry.Ids[2] := Id + 2;
+                Entry.Ids[3] := Id + 3;
               end;
-            end
-            else
-            begin
-              SetLength(Entry.Ids, 4);
-              Entry.Ids[0] := Id;
-              Entry.Ids[1] := Id + 1;
-              Entry.Ids[2] := Id + 2;
-              Entry.Ids[3] := Id + 3;
-            end;
             if TryStrToUInt(FindKeyValue(FileStrings.Strings, BlockStart, BlockEnd, 'ids_short_name'), Id) then
             begin
               SetLength(Entry.Ids, Length(Entry.Ids) + 1);
@@ -598,7 +644,7 @@ begin
         try
           Result.Add(Entry.Nickname, Entry);
         except
-          On EListError do Log.Append('Nickname duplicated! ' + Entry.Nickname);
+          On EListError do AppendLog('Nickname duplicated! ' + Entry.Nickname);
         end;
       end
       else
@@ -607,7 +653,7 @@ begin
   end;
 end;
 
-procedure BuildKnowledgeMap(const FilesStrings: TFileStringsArray; const IdOffset: Uint32; const Log: TStrings);
+procedure BuildKnowledgeMap(const FilesStrings: TFileStringsArray; const IdOffset: Uint32);
 const
   KnowDbIdentifier = ';knowdb ';
 var
@@ -615,16 +661,16 @@ var
   Entity: TGameExploration;
   FileStrings: TFileStrings;
   Id: Uint32;
-  VisitFlag: UInt8;
+  VisitFlag: Uint8;
   Index: ValSInt;
-  Line: String;       
+  Line: String;
   LineParts: TStringArray;
   ValueParts: TStringArray;
   Nicknames: TStringArray;
   Nickname: String;
   Entry: String;
 begin
-  GameExplorationEntities := CollectAllExplorationEntities(FilesStrings, IdOffset, Log);
+  GameExplorationEntities := CollectAllExplorationEntities(FilesStrings, IdOffset);
 
   KnowledgeMap.Strings.Clear;
   KnowledgeMap.Strings.Append('[KnowledgeMapTable]');
@@ -636,9 +682,9 @@ begin
       TGameExplorationType.Base:
         VisitFlag := 31;
       TGameExplorationType.Zone:
-        VisitFlag := 33;            
+        VisitFlag := 33;
       TGameExplorationType.Group:
-        VisitFlag := 65;        
+        VisitFlag := 65;
       TGameExplorationType.StarSystem:
         VisitFlag := 1;
     end;
@@ -665,7 +711,7 @@ begin
           ValueParts := LineParts[1].Split(',');
           if Length(ValueParts) > 3 then
             TryStrToUInt(ValueParts[3].Trim, Id);
-        end;      
+        end;
         'know':
         begin
           ValueParts := LineParts[1].Split(',');
@@ -754,46 +800,47 @@ begin
     FileStrings.Strings.Free;
 end;
 
-procedure Process(const DirectoryPath: String; const IdOffset: Uint32; const OutputFileName: String; const Log: TStrings);
+procedure Process(const DirectoryPath: String; const IdOffset: Uint32; const OutputFileName: String; const GuiLog: TStrings);
 var
   IniFilesStrings: TFileStringsArray;
-  FileStrings: TFileStrings;
+  Index: ValSInt;
   FrcStrings: TStringList;
   FileResourceLink: TFileResourceLink;
 begin
-  Log.Append('Reading .ini files in ' + DirectoryPath);
+  Log := GuiLog;
+  AppendLog('Reading .ini files in ' + DirectoryPath);
   IniFilesStrings := LoadAllValidIniFiles(DirectoryPath, IdOffset);
 
-  for FileStrings in IniFilesStrings do
-    FindResources(FileStrings.Strings);
+  for Index := 0 to High(IniFilesStrings) do
+    FindResources(@IniFilesStrings[Index]);
 
-  Log.Append('Creating IDs from ' + IntToStr(Length(Resources)) + ' resource blocks...');
+  AppendLog('Creating IDs from ' + IntToStr(Length(Resources)) + ' resource blocks...');
   LinkResourcesWithIds(Resources, IdOffset, Log);
 
-  Log.Append('Writing IDs into .ini files...');
+  AppendLog('Writing IDs into .ini files...');
   ApplyIdsToFiles(Resources);
 
   for FileResourceLink in Resources do
     if (FileResourceLink.ResourceType = TResourceType.StringType) or (FileResourceLink.ResourceType = TResourceType.HtmlType) then
-      ReplaceResourcePlaceholders(FileResourceLink.FileStrings, FileResourceLink.FileStringsLineNumber, FileResourceLink.Resource);
+      ReplaceResourcePlaceholders(FileResourceLink.FileStrings^.Strings, FileResourceLink.FileStringsLineNumber, FileResourceLink.Resource);
 
-  Log.Append('Saving all modified .ini files...');
+  AppendLog('Saving all modified .ini files...');
   SaveAllFiles(IniFilesStrings);
   if Assigned(InfocardMap.Strings) then
   begin
-    Log.Append('Saving modified infocardmap.ini file...');
+    AppendLog('Saving modified infocardmap.ini file...');
     InfocardMap.Strings.SaveToFile(InfocardMap.FileName);
     InfocardMap.Strings.Free;
   end;
   if Assigned(KnowledgeMap.Strings) then
   begin
-    BuildKnowledgeMap(IniFilesStrings, IdOffset, Log);
-    Log.Append('Saving modified knowledgemap.ini file...');
+    BuildKnowledgeMap(IniFilesStrings, IdOffset);
+    AppendLog('Saving modified knowledgemap.ini file...');
     KnowledgeMap.Strings.SaveToFile(KnowledgeMap.FileName);
     KnowledgeMap.Strings.Free;
   end;
 
-  Log.Append('Saving "' + OutputFileName + '"...');
+  AppendLog('Saving "' + OutputFileName + '"...');
   FrcStrings := CreateFrcStrings(Resources);
   FrcStrings.WriteBOM := True;
   FrcStrings.SaveToFile(OutputFileName, TEncoding.Unicode);
@@ -806,7 +853,9 @@ begin
   FreeAllLoadedIniFiles(IniFilesStrings);
   SetLength(IniFilesStrings, 0);
 
-  Log.Append('Done!');
+  AppendLog('Done!');
+  Log.SaveToFile('log.txt');
+  Log := nil;
 end;
 
 end.
