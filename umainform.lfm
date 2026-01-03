@@ -7,7 +7,7 @@ object MainForm: TMainForm
   ClientHeight = 240
   ClientWidth = 320
   OnCreate = FormCreate
-  LCLVersion = '2.3.0.0'
+  LCLVersion = '3.4.0.0'
   object WarningsListBox: TListBox
     Left = 0
     Height = 240

@@ -37,9 +37,14 @@ const
   IdOffset = 458753;
 
 procedure TMainForm.FormCreate(Sender: TObject);
+var
+  InputDirectory: String = '';
 begin
-  if SelectDirectoryDialog.Execute then
-    Process(SelectDirectoryDialog.FileName, IdOffset, 'FLSR-Texts.frc', WarningsListBox.Items);
+  if Application.HasOption('i', 'input') and DirectoryExists(Application.GetOptionValue('i', 'input')) then
+    InputDirectory := Application.GetOptionValue('i', 'input');
+  if InputDirectory.IsEmpty and SelectDirectoryDialog.Execute then
+    InputDirectory := SelectDirectoryDialog.FileName;
+  Process(InputDirectory, IdOffset, 'FLSR-Texts.frc', WarningsListBox.Items);
 end;
 
 end.
