@@ -213,6 +213,11 @@ begin
     begin
       if Resource.ResourceType = TResourceType.StringType then
       begin
+        if Resource.Resource.Count = 0 then
+        begin
+          AppendLog(Resource, 'No resources for generation found. Skipping ' + UIntToStr(Resource.Id));
+          Continue;
+        end;
         Result.Append('S ' + UIntToStr(Resource.Id) + ' ' + Resource.Resource.Strings[0]);
         for LineIndex := 1 to Resource.Resource.Count - 1 do
           Result.Append(' ' + Resource.Resource.Strings[LineIndex]);
