@@ -46,6 +46,17 @@ end;
 function LifetimeReplacer(const FileStrings: TStrings; const BlockBeginLineNumber: ValSInt; const BlockEndLineNumber: ValSInt): String;
 begin
   Result := UProjectileReplacers.LifetimeReplacer(FindProjectileArch(FileStrings, BlockBeginLineNumber, BlockEndLineNumber));
+end;          
+
+function AmmoRefillReplacer(const FileStrings: TStrings; const BlockBeginLineNumber: ValSInt; const BlockEndLineNumber: ValSInt): String;
+var
+  RefillDelay: String;
+  ParsedRefillDelay: Single;
+begin
+  Result := '';
+  RefillDelay := FindKeyValue(FileStrings, BlockBeginLineNumber, BlockEndLineNumber, 'ammo_refill_delay');
+  if TryStrToFloat(RefillDelay, ParsedRefillDelay) then
+    Result := ParseFloatStringToNumberString((1 / ParsedRefillDelay).ToString);
 end;
 
 function GetCounterMeasureDropperPlaceholderReplacers: TPlaceholderReplacerArray;
@@ -66,12 +77,15 @@ begin
   Result[3].Replacer := @DiversionReplacer;
 
   Result[4].Placeholder := '$lifetime';
-  Result[4].Replacer := @LifetimeReplacer;
+  Result[4].Replacer := @LifetimeReplacer;      
 
-  Result[5] := GetHitpointsReplacer;
-  Result[6] := GetPowerUsageReplacer;
-  Result[7] := GetMassReplacer;
-  Result[8] := GetVolumeReplacer;
+  Result[5].Placeholder := '$refillDelay';
+  Result[5].Replacer := @AmmoRefillReplacer;
+
+  Result[6] := GetHitpointsReplacer;
+  Result[7] := GetPowerUsageReplacer;
+  Result[8] := GetMassReplacer;
+  Result[9] := GetVolumeReplacer;
 end;
 
 end.
