@@ -27,6 +27,8 @@ function HullDamageReplacer(const ProjectileArch: TBlockPositions): String;
 function EnergyDamageReplacer(const ProjectileArch: TBlockPositions): String;
 function ImpulseReplacer(const ProjectileArch: TBlockPositions): String;
 function ExplosionRadiusReplacer(const ProjectileArch: TBlockPositions): String;
+function AmmoLimitReplacer(const ProjectileArch: TBlockPositions): String;                 
+function AmmoRefillDelayReplacer(const ProjectileArch: TBlockPositions): String;
 
 implementation
 
@@ -258,6 +260,20 @@ begin
   Result := '';
   if (ProjectileArch.BeginLineNumber >= 0) and (ProjectileArch.EndLineNumber > ProjectileArch.BeginLineNumber) then
     Result := UExplosionReplacers.ExplosionRadiusReplacer(FindExplosionArch(ProjectileArch.Strings, ProjectileArch.BeginLineNumber, ProjectileArch.EndLineNumber));
+end;
+
+function AmmoLimitReplacer(const ProjectileArch: TBlockPositions): String;
+begin
+  Result := '';
+  if (ProjectileArch.BeginLineNumber >= 0) and (ProjectileArch.EndLineNumber > ProjectileArch.BeginLineNumber) then
+    Result := ParseFloatStringToNumberString(FindKeyValue(ProjectileArch.Strings, ProjectileArch.BeginLineNumber, ProjectileArch.EndLineNumber, 'ammo_limit'));
+end;
+
+function AmmoRefillDelayReplacer(const ProjectileArch: TBlockPositions): String;
+begin
+  Result := '';
+  if (ProjectileArch.BeginLineNumber >= 0) and (ProjectileArch.EndLineNumber > ProjectileArch.BeginLineNumber) then
+    Result := ParseFloatStringToNumberString(FindKeyValue(ProjectileArch.Strings, ProjectileArch.BeginLineNumber, ProjectileArch.EndLineNumber, 'ammo_refill_delay'));
 end;
 
 end.

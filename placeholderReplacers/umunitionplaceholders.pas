@@ -75,12 +75,17 @@ end;
 function ExplosionRadiusReplacer(const FileStrings: TStrings; const BlockBeginLineNumber: ValSInt; const BlockEndLineNumber: ValSInt): String;
 begin
   Result := UProjectileReplacers.ExplosionRadiusReplacer(TBlockPositions.Create(FileStrings, BlockBeginLineNumber, BlockEndLineNumber));
+end;       
+
+function AmmoLimitReplacer(const FileStrings: TStrings; const BlockBeginLineNumber: ValSInt; const BlockEndLineNumber: ValSInt): String;
+begin
+  Result := UProjectileReplacers.AmmoLimitReplacer(TBlockPositions.Create(FileStrings, BlockBeginLineNumber, BlockEndLineNumber));
 end;
 
 function GetMunitionPlaceholderReplacers: TPlaceholderReplacerArray;
 begin
   Result := nil;
-  SetLength(Result, 15);
+  SetLength(Result, 16);
 
   Result[0].Placeholder := '$topSpeed';
   Result[0].Replacer := @TopSpeedReplacer;
@@ -118,9 +123,12 @@ begin
   Result[11].Placeholder := '$explosionRadius';
   Result[11].Replacer := @ExplosionRadiusReplacer;
 
-  Result[12] := GetHitpointsReplacer;
-  Result[13] := GetMassReplacer;
-  Result[14] := GetVolumeReplacer;
+  Result[12].Placeholder := '$ammoLimit';
+  Result[12].Replacer := @AmmoLimitReplacer;
+
+  Result[13] := GetHitpointsReplacer;
+  Result[14] := GetMassReplacer;
+  Result[15] := GetVolumeReplacer;
 end;
 
 end.

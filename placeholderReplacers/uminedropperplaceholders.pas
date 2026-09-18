@@ -78,10 +78,15 @@ begin
   Result := UProjectileReplacers.ExplosionRadiusReplacer(FindProjectileArch(FileStrings, BlockBeginLineNumber, BlockEndLineNumber));
 end;
 
+function AmmoLimitReplacer(const FileStrings: TStrings; const BlockBeginLineNumber: ValSInt; const BlockEndLineNumber: ValSInt): String;
+begin
+  Result := UProjectileReplacers.AmmoLimitReplacer(FindProjectileArch(FileStrings, BlockBeginLineNumber, BlockEndLineNumber));
+end;
+
 function GetMineDropperPlaceholderReplacers: TPlaceholderReplacerArray;
 begin
   Result := nil;
-  SetLength(Result, 15);
+  SetLength(Result, 16);
 
   Result[0].Placeholder := '$topSpeed';
   Result[0].Replacer := @TopSpeedReplacer;
@@ -116,10 +121,13 @@ begin
   Result[10].Placeholder := '$refireRate';
   Result[10].Replacer := @RefireRateReplacer;
 
-  Result[11] := GetHitpointsReplacer;      
-  Result[12] := GetPowerUsageReplacer;
-  Result[13] := GetMassReplacer;
-  Result[14] := GetVolumeReplacer;
+  Result[11].Placeholder := '$ammoLimit';
+  Result[11].Replacer := @AmmoLimitReplacer;
+
+  Result[12] := GetHitpointsReplacer;
+  Result[13] := GetPowerUsageReplacer;
+  Result[14] := GetMassReplacer;
+  Result[15] := GetVolumeReplacer;
 end;
 
 end.

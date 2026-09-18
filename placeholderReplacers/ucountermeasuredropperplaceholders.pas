@@ -46,12 +46,22 @@ end;
 function LifetimeReplacer(const FileStrings: TStrings; const BlockBeginLineNumber: ValSInt; const BlockEndLineNumber: ValSInt): String;
 begin
   Result := UProjectileReplacers.LifetimeReplacer(FindProjectileArch(FileStrings, BlockBeginLineNumber, BlockEndLineNumber));
+end;    
+
+function AmmoLimitReplacer(const FileStrings: TStrings; const BlockBeginLineNumber: ValSInt; const BlockEndLineNumber: ValSInt): String;
+begin
+  Result := UProjectileReplacers.AmmoLimitReplacer(FindProjectileArch(FileStrings, BlockBeginLineNumber, BlockEndLineNumber));
+end;   
+
+function RefillDelayReplacer(const FileStrings: TStrings; const BlockBeginLineNumber: ValSInt; const BlockEndLineNumber: ValSInt): String;
+begin
+  Result := UProjectileReplacers.AmmoRefillDelayReplacer(FindProjectileArch(FileStrings, BlockBeginLineNumber, BlockEndLineNumber));
 end;
 
 function GetCounterMeasureDropperPlaceholderReplacers: TPlaceholderReplacerArray;
 begin
   Result := nil;
-  SetLength(Result, 9);
+  SetLength(Result, 11);
 
   Result[0].Placeholder := '$refireRate';
   Result[0].Replacer := @RefireRateReplacer;
@@ -68,10 +78,16 @@ begin
   Result[4].Placeholder := '$lifetime';
   Result[4].Replacer := @LifetimeReplacer;
 
-  Result[5] := GetHitpointsReplacer;
-  Result[6] := GetPowerUsageReplacer;
-  Result[7] := GetMassReplacer;
-  Result[8] := GetVolumeReplacer;
+  Result[5].Placeholder := '$ammoLimit';
+  Result[5].Replacer := @AmmoLimitReplacer;
+
+  Result[6].Placeholder := '$refillDelay';
+  Result[6].Replacer := @RefillDelayReplacer;
+
+  Result[7] := GetHitpointsReplacer;
+  Result[8] := GetPowerUsageReplacer;
+  Result[9] := GetMassReplacer;
+  Result[10] := GetVolumeReplacer;
 end;
 
 end.

@@ -195,12 +195,17 @@ end;
 function TurretTurnRateReplacer(const FileStrings: TStrings; const BlockBeginLineNumber: ValSInt; const BlockEndLineNumber: ValSInt): String;
 begin
   Result := ParseFloatStringToNumberString(FindKeyValue(FileStrings, BlockBeginLineNumber, BlockEndLineNumber, 'turn_rate'));
+end;         
+
+function AmmoLimitReplacer(const FileStrings: TStrings; const BlockBeginLineNumber: ValSInt; const BlockEndLineNumber: ValSInt): String;
+begin
+  Result := UProjectileReplacers.AmmoLimitReplacer(FindProjectileArch(FileStrings, BlockBeginLineNumber, BlockEndLineNumber));
 end;
 
 function GetGunPlaceholderReplacers: TPlaceholderReplacerArray;
 begin
   Result := nil;
-  SetLength(Result, 22);
+  SetLength(Result, 23);
 
   Result[0].Placeholder := '$classLong';
   Result[0].Replacer := @LongClassReplacer;
@@ -256,10 +261,13 @@ begin
   Result[17].Placeholder := '$refireRate';
   Result[17].Replacer := @RefireRateReplacer;
 
-  Result[18] := GetHitpointsReplacer;
-  Result[19] := GetPowerUsageReplacer;
-  Result[20] := GetMassReplacer;
-  Result[21] := GetVolumeReplacer;
+  Result[18].Placeholder := '$ammoLimit';
+  Result[18].Replacer := @AmmoLimitReplacer;
+
+  Result[19] := GetHitpointsReplacer;
+  Result[20] := GetPowerUsageReplacer;
+  Result[21] := GetMassReplacer;
+  Result[22] := GetVolumeReplacer;
 end;
 
 end.
