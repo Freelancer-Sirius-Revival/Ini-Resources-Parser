@@ -281,13 +281,13 @@ begin
       case LineParts[0].Trim.ToLower of
         'rumor':
         begin
-          ValueParts := LineParts[1].Split(',');
+          ValueParts := LineParts[1].Split(';')[0].Split(',');
           if Length(ValueParts) > 2 then
             Line := LineParts[0] + '=' + ValueParts[0] + ',' + ValueParts[1] + ',' + ValueParts[2] + ', ' + UIntToStr(Resources[0].Id) + Commentary;
         end;
         'rumor_type2':
         begin
-          ValueParts := LineParts[1].Split(',');
+          ValueParts := LineParts[1].Split(';')[0].Split(',');
           if Length(ValueParts) > 2 then
             Line := LineParts[0] + '=' + ValueParts[0] + ',' + ValueParts[1] + ',' + ValueParts[2] + ', ' + UIntToStr(Resources[0].Id) + Commentary;
         end;
@@ -317,14 +317,32 @@ begin
           if Assigned(InfocardMap.Strings) and (Length(Resources) > 1) then
             InfocardMap.Strings.Append('map = ' + UIntToStr(Resources[0].Id) + ', ' + UIntToStr(Resources[1].Id));
         end;
-        'act_changestate',
-        'act_setnnobj':
+        'act_nnpath',
+        'act_setnnobj',
+        'act_displaymsg':
         begin
           ValueParts := LineParts[1].Split(';')[0].Split(',');
           if Length(ValueParts) > 0 then
           begin
             Line := LineParts[0] + '=' + ValueParts[0] + ', ' + UIntToStr(Resources[0].Id);
             for ValueIndex := 2 to High(ValueParts) do
+              Line := Line + ',' + ValueParts[ValueIndex];
+            Line := Line + Commentary;
+          end;
+        end;         
+        'act_leavemsn':
+        begin
+          ValueParts := LineParts[1].Split(';')[0].Split(',');
+          if Length(ValueParts) > 1 then
+            Line := LineParts[0] + '=' + ValueParts[0] + ', ' + ValueParts[1] + ', ' + UIntToStr(Resources[0].Id) + Commentary;
+        end;
+        'act_popupdialog':
+        begin
+          ValueParts := LineParts[1].Split(';')[0].Split(',');
+          if (Length(ValueParts) > 2) and (Length(Resources) > 1) then
+          begin
+            Line := LineParts[0] + '=' + ValueParts[0] + ', ' + ValueParts[1] + ', ' + UIntToStr(Resources[0].Id) + ', ' + UIntToStr(Resources[1].Id);    
+            for ValueIndex := 4 to High(ValueParts) do
               Line := Line + ',' + ValueParts[ValueIndex];
             Line := Line + Commentary;
           end;
